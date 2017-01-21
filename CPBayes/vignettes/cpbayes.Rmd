@@ -1,0 +1,154 @@
+---
+title: "CPBayes (Bayesian meta analysis for studying cross-phenotype genetic associations) package"
+author: "Arunabha Majumdar, Tanushree Haldar, John Witte"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+# Introduction
+Simultaneous analysis of genetic associations with multiple phenotypes may reveal shared genetic susceptibility across traits (pleiotropy). CPBayes is a Bayesian meta analysis approach for studying cross-phenotype genetic associations. It uses summary-level data across multiple phenotypes to simultaneously measure the evidence of aggregate-level pleiotropic association and estimate an optimal subset of traits associated with the risk locus. CPBayes is based on a spike and slab prior and is implemented by Markov chain Monte Carlo (MCMC) technique Gibbs sampling. 
+
+The R-package consists of three main functions: 
+
+1. cpbayes_uncor(): This function implements CPBayes for uncorrelated summary statistics. The summary statistics across traits/studies are uncorrelated when the studies have no overlapping subject. 
+1. cpbayes_cor(): This function implements CPBayes for correlated summary statistics. The summary statistics across traits/studies are correlated when the studies have overlapping subjects or the phenotypes were measured in a cohort study. 
+1. post\_summaries(): This function summarizes the MCMC data produced by the main two functions cpbayes\_uncor() or cpbayes\_cor() listed above. It computes additional summaries to provide a better insight into a pleiotropic signal. It works in the same way for both cpbayes\_uncor() and cpbayes\_cor().
+
+
+# Installation
+
+You can install CPBayes from CRAN.
+
+```{r install_package, eval=FALSE, collapse = TRUE}
+install.packages("CPBayes")
+library("CPBayes")
+```
+
+# An example demonstrating how to run CPBayes for uncorrelated summary statistics. 
+
+Get the path to the data.
+
+```{r load_Beta, collapse = TRUE}
+library("CPBayes")
+# Load the beta hat vector
+BetaHatfile <- system.file("extdata", "BetaHat.rda", package = "CPBayes")
+load(BetaHatfile)
+BetaHat
+```
+
+BetaHat contains an example data of the main genetic effect (beta/log(odds ratio)) estimates for a single nucleotide polymorphism (SNP) obtained from 10 separate case-control studies for 10 different diseases. In each case-control study comprising a distinct set of 7000 cases and 10000 controls, we fit a logistic regression of the case-control status on the genotype coded as the minor allele count for all the individuals in the sample. One can also include various covariates, such as, age, gender, principal components (PCs) of ancestries in the logistic regression. From each logistic regression for a disease, we obtain the estimate of the main genetic association parameter (beta/log(odds ratio)) along with the corresponding standard error. Since the studies do not have any overlapping subject, the beta-hat across traits are uncorrelated.  
+
+```{r load_SE, collapse = TRUE}
+# Load the standard error vector
+SEfile <- system.file("extdata", "SE.rda", package = "CPBayes")
+load(SEfile)
+SE
+```
+
+
+SE contains the standard errors corresponding to the above beta hat vector across 10 separate case-control studies. 
+
+
+Next we specify the name of the diseases/phenotypes and the genetic variant.
+```{r names, collapse = TRUE}
+# Specify the names of the traits and the genetic variant.
+traitNames <- paste("Disease", 1:10, sep = "")
+SNP1 <- "rs1234"
+traitNames
+SNP1
+```
+
+Now we implement CPBayes for this example data. Since the studies are non-overlapping, the summary statistics across traits are uncorrelated. Hence we run the the cpbayes\_uncor function.
+  
+```{r uncor_example, collapse = TRUE}
+# Run the uncorrelated version of CPBayes.
+result <- cpbayes_uncor(BetaHat, SE, Phenotypes = traitNames, Variant = SNP1)
+```
+
+There are more options of arguments to pass into the function (see the Arguments section of cpbayes\_uncor function in the CPBayes manual). After running the cpbayes\_uncor function, it prints the log10(Bayes factor) (denoted as log10\_BF) and the subset of non-null traits (denoted as subset) produced by CPBayes. The Bayes factor evaluates the overall pleiotropic association and the subset of non-null traits are the most important phenotypes that underlie the pleiotropic signal. However, the printed outputs are only a part of the 'result'. The 'result' is a list that constitutes of various components. An overall summary of 'result' can be seen by using the str() function (as shown below). 
+
+```{r result_structure, collapse= TRUE}
+# Overall summary of the primary results produced by cpbayes_uncor.
+str(result)
+```
+
+result\$variantName returns the name of the genetic variant specified by the user. Here, it is 'rs1234'. result\$log10\_BF provides the log10(Bayes factor) (discussed above). result\$PPNA provides the posterior probability of null association which is another measure of the aggregate-level pleiotropic association. result\$subset provides the optimal subset of associated/non-null traits selected by CPBayes. Thus, for the example data, CPBayes produced a log10(Bayes factor) of 11.4, PPNA of 3.99*10^(-15), and selected Disease7, Disease9, and Disease10 as associated/non-null. Detailed interpretation of all the outputs are described in the Value section of the cpbayes\_uncor function in CPBayes manual. 
+
+The post\_summaries function provides important insights into an obseved pleiotropic signal, e.g., the direction of associations, posterior mean/median and 95\% credible interval (Bayesian analog of the confidence interval) of the unknown true genetic effect (beta/odds ratio) on each trait, etc.
+
+```{r post_summary, collapse= TRUE}
+# Post summary of the MCMC data produced by cpbayes_uncor.
+PleioSumm <- post_summaries(result, level = 0.05)  
+str(PleioSumm)
+```
+
+So we have to pass the list 'result' returned by the cpbayes\_uncor function as the first argument and the 'level' as the second argument into the post\_summaries function. If 'level' is not specified, the default value is 0.05. Note that, post\_summaries computes (1-level)\% credible interval of the unknown true genetic effect (beta/odds ratio) on each trait. It estimates the direction of association with the important traits, the vector of trait-specific posterior probability of association (PPAj), etc. For detailed description of different outputs provided by this function, please see the Value section of the post_summaries function in CPBayes manual.
+
+# Example of cpbayes_cor
+
+
+Next we demonstrate how to run CPBayes for correlated summary statistics. Get the path to the data.
+
+```{r load_cBeta, collapse = TRUE}
+# Load the beta-hat vector
+datafile <- system.file("extdata", "cBetaHat.rda", package = "CPBayes")
+load(datafile)
+cBetaHat
+```
+
+Here 'c' in cBetaHat stands for correlated case. cBetaHat contains an example data of the main association parameter (beta) estimates for a SNP across 10 diseases obtained from 10 overlapping case-control studies. Each of the 10 studies has a distinct set of 7000 cases and a common set of 10000 controls shared across all the studies. In each case-control study comprising 7000 cases and 10000 controls, we fit a logistic regression of the case-control status on the genotype coded as the minor allele count for all the individuals in the sample. One can also include various covariates, such as, age, gender, principal components (PCs) of ancestries in the logistic regression. From each logistic regression for a disease, we obtain the estimate of the main genetic association parameter (beta) along with the corresponding standard error. Since the studies have overlapping subjects, the beta hats are correlated.  
+
+```{r load_cSE, collapse = TRUE}
+# Load the standard error vector
+datafile <- system.file("extdata", "cSE.rda", package = "CPBayes")
+load(datafile)
+cSE
+```
+
+cSE contains the standard errors corresponding to the above beta hat vector across 10 overlapping case-control studies. 
+
+```{r load_cor, collapse = TRUE}
+# Load the correlation matrix of the effect estimates (cBetaHat)
+datafile <- system.file("extdata", "cor.rda", package = "CPBayes")
+load(datafile)
+cor
+```
+
+The correlation matrix of the effect estimates (cBetaHat) is given by 'cor'. Next we run the correlated version of CPBayes for this example data.
+
+  
+```{r cor_example, collapse = TRUE}
+# Run the correlated version of CPBayes.
+result <- cpbayes_cor(cBetaHat, cSE, cor, Phenotypes = traitNames, Variant = SNP1)
+```
+
+
+There are more options of arguments to pass into the function (see the Arguments section of the 'cpbayes\_cor' function in CPBayes manual). After running the cpbayes\_cor() function, it prints the log10(Bayes factor) (denoted as log10\_BF) and the subset of non-null traits (denoted as subset) produced by CPBayes. The Bayes factor evaluates the overall pleiotropic association and the subset of non-null traits are the most important phenotypes that underlie the pleiotropic signal. However, the printed outputs are only a part of the 'result'. The 'result' is actually a list that constitutes of various components. An overall summary of 'result' can be seen by using the str() function (as shown below). 
+
+
+```{r result_structure_cor, collapse= TRUE}
+# Overall summary of the primary results produced by cpbayes_cor.
+str(result)
+```
+
+
+result\$variantName returns the name of the genetic variant specified by the user. Here, it is 'rs1234'. result\$log10\_BF provides the log10(Bayes factor) (discussed above). result\$PPNA provides the posterior probability of null association which is another measure of the aggregate-level pleiotropic association. result\$subset provides the optimal subset of associated traits selected by CPBayes. Thus for the example data, CPBayes produced a log10(Bayes factor) of 18.9, PPNA of 1.31*10^(-22), and selected Disease9 and Disease10 as associated/non-null. Interpretation of all the other outputs are described in the Value section of the cpbayes\_cor() function in CPBayes manual. 
+
+The post\_summaries() function provides important insights into an obseved pleiotropic signal, e.g., the direction of associations, posterior mean/median and 95\% credible interval (Bayesian analog of the confidence interval) of the unknown true genetic effect  (beta/odds ratio) on each trait, etc.
+
+
+```{r post_summary_cor, collapse= TRUE}
+# Post summary of the results obtained by cpbayes_cor.
+PleioSumm <- post_summaries(result, level = 0.05)  
+str(PleioSumm)
+```
+
+This function works exactly in the same way as for post-processing the MCMC output of cpbayes\_uncor(). Thus, we need to pass the list 'result' returned by the cpbayes\_cor() function as the first argument and the 'level' as the second argument into the post\_summaries() function. If 'level' is not specified, the default value is 0.05. Note that, post_summaries() computes (1-level)\% credible interval for the unknown true genetic effect (beta/odds ratio) on each trait. It provides the direction of the association with the important traits, the vector of trait-specific posterior probability of association (PPAj), etc. For detailed description of different outputs provided by this function, please see the Value section of the post_summaries() function in CPBayes manual.
+
+
+
+
+
